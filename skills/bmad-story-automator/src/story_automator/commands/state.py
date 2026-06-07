@@ -11,6 +11,14 @@ from ..core.sprint import sprint_status_done_in_text
 from ..core.utils import count_matches, ensure_dir, file_exists, get_project_root, now_utc, now_utc_z, read_text, write_json
 
 
+def _yaml_value(value: Any) -> str:
+    # Emit non-ASCII as raw UTF-8, not \uXXXX escapes. These values are read back
+    # with unquote_scalar (frontmatter.py), which strips the surrounding quotes
+    # WITHOUT JSON-decoding, so an ensure_ascii escape would round-trip as the
+    # literal text "\uXXXX" and corrupt the value.
+    return json.dumps(value, ensure_ascii=False)
+
+
 def cmd_build_state_doc(args: list[str]) -> int:
     template = ""
     output_folder = ""
@@ -76,7 +84,7 @@ def cmd_build_state_doc(args: list[str]) -> int:
         f"  maxParallel: {int(overrides.get('maxParallel', 1) or 1)}\n",
         text,
     )
-    custom_instructions = json.dumps(config.get("customInstructions", ""))
+    custom_instructions = _yaml_value(config.get("customInstructions", ""))
     text = re.sub(r"(?m)^customInstructions:.*$", lambda m: f"customInstructions: {custom_instructions}", text)
     agent_config = config.get("agentConfig")
     if isinstance(agent_config, dict):
@@ -97,8 +105,8 @@ def cmd_build_state_doc(args: list[str]) -> int:
 
         lines = [
             "agentConfig:",
-            f"  defaultPrimary: {json.dumps(default_primary)}",
-            f"  defaultFallback: {json.dumps(default_fallback)}",
+            f"  defaultPrimary: {_yaml_value(default_primary)}",
+            f"  defaultFallback: {_yaml_value(default_fallback)}",
         ]
         if isinstance(per_task, dict) and per_task:
             lines.append("  perTask:")
@@ -108,10 +116,10 @@ def cmd_build_state_doc(args: list[str]) -> int:
                     continue
                 lines.append(f"    {task}:")
                 if "primary" in entry:
-                    lines.append(f"      primary: {json.dumps(entry['primary'])}")
+                    lines.append(f"      primary: {_yaml_value(entry['primary'])}")
                 if "fallback" in entry:
                     value = entry["fallback"]
-                    lines.append(f"      fallback: {'false' if value is False else json.dumps(value)}")
+                    lines.append(f"      fallback: {'false' if value is False else _yaml_value(value)}")
         complexity_overrides = agent_config.get("complexityOverrides", {})
         if isinstance(complexity_overrides, dict) and complexity_overrides:
             lines.append("  complexityOverrides:")
@@ -126,14 +134,17 @@ def cmd_build_state_doc(args: list[str]) -> int:
                         continue
                     lines.append(f"      {task}:")
                     if "primary" in entry:
-                        lines.append(f"        primary: {json.dumps(entry['primary'])}")
+                        lines.append(f"        primary: {_yaml_value(entry['primary'])}")
                     if "fallback" in entry:
                         value = entry["fallback"]
-                        lines.append(f"        fallback: {'false' if value is False else json.dumps(value)}")
+                        lines.append(f"        fallback: {'false' if value is False else _yaml_value(value)}")
         block = "\n".join(lines) + "\n"
-        text = re.sub(r"(?m)^agentConfig:\n(?:(?:\s{2}.*\n)*)", block, text)
+        # Callable repl: the block is inserted verbatim, never parsed for \g / \1
+        # backrefs, so a "\uXXXX" or backslash in an agent/model name can't raise
+        # re.error: bad escape (the same hazard fixed below for scalar values).
+        text = re.sub(r"(?m)^agentConfig:\n(?:(?:\s{2}.*\n)*)", lambda m: block, text)
     for key, value in replacements.items():
-        text = re.sub(rf"(?m)^{re.escape(key)}:.*$", lambda m, k=key, v=value: f"{k}: {json.dumps(v)}", text)
+        text = re.sub(rf"(?m)^{re.escape(key)}:.*$", lambda m, k=key, v=value: f"{k}: {_yaml_value(v)}", text)
     story_range = [item for item in config.get("storyRange", []) if isinstance(item, str)]
     progress_rows = "\n".join(f"| {story_id} | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | pending |" for story_id in story_range)
     body = {
