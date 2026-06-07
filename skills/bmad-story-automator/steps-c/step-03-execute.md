@@ -152,6 +152,9 @@ validation=$("$scripts" orchestrator-helper verify-step create {story_id} --stat
 
 ```bash
 # Retry loop with agent alternation: see {retryStrategy}
+# Mark dev start so test-counts can tell a JUnit artifact from THIS run (Tier-1
+# capture) apart from a stale one left by an earlier story.
+dev_started=$(date -u +%s)
 session=$("$scripts" tmux-wrapper spawn dev {epic} {story_id} \
   --agent "$current_agent" \
   --command "$("$scripts" tmux-wrapper build-cmd dev {story_id} --agent "$current_agent" --state-file "$state_file")")
