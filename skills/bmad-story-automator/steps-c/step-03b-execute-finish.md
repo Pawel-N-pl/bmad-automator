@@ -84,7 +84,7 @@ if [ "$is_done" = "true" ]; then
     # from a validator/infra error so a stuck story is diagnosable — mirrors §E's .ok branch.
     if [ "$(printf '%s' "$structure" | jq -r '.ok // "false"')" != "true" ]; then
         is_done="false"
-        echo "- **[$(date -u +%Y-%m-%dT%H:%M:%SZ)]** CRITICAL: story-structure gate could not run, holding at in-progress: $(printf '%s' "$structure" | jq -c '.error // .')" >> "{outputFile}"
+        echo "- **[$(date -u +%Y-%m-%dT%H:%M:%SZ)]** CRITICAL: story-structure gate could not run, holding at in-progress: $(printf '%s' "$structure" | jq -c '.error // .' 2>/dev/null || printf '%s' "$structure")" >> "{outputFile}"
     elif [ "$(printf '%s' "$structure" | jq -r '.in_sync')" != "true" ]; then
         is_done="false"
         echo "- **[$(date -u +%Y-%m-%dT%H:%M:%SZ)]** CRITICAL: story structure incomplete, holding at in-progress: $(printf '%s' "$structure" | jq -c '{missing_sections, placeholder_sections, unchecked_tasks}')" >> "{outputFile}"
