@@ -1,0 +1,39 @@
+# CodeRabbit config — see https://docs.coderabbit.ai/getting-started/configure-coderabbit
+# Seeded on the fork's default branch (v1.15-dev). Fork learnings start empty, so the
+# house style and recurring review themes are encoded here up front to blunt the cold start.
+language: en-US
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  auto_review:
+    enabled: true
+    drafts: false
+  # House style: the package is deliberately docstring-free; rationale lives in PR/commit
+  # prose, not in code. Keep terse inline `#` why-comments only where logic isn't self-evident.
+  path_instructions:
+    - path: "skills/bmad-story-automator/src/story_automator/**/*.py"
+      instructions: >-
+        This package is intentionally docstring-free. Do NOT suggest adding
+        module/class/function docstrings — descriptive names carry intent and
+        rationale belongs in the PR/commit message. Only flag inline `#` comments
+        when they restate obvious code; keep terse "why" comments. Prefer reuse over
+        duplication and require tests for behavior changes. Path/filename derivation
+        must be deterministic from config/release-line resolvers — flag any
+        LLM-freelanced or hardcoded artifact filenames, and flag JUnit/test-count
+        logic that does not read from the JUnit source of truth.
+    - path: "tests/**/*.py"
+      instructions: >-
+        Tests are flat under tests/ and pin specific regressions (unicode round-trip,
+        sprint-compare key format, test counts, reconcile). When reviewing a fix, check
+        a matching regression test was added or extended. Docstring-free style applies here too.
+  # Vendored/generated artifacts and binaries — no value reviewing these.
+  path_filters:
+    - "!**/*.png"
+    - "!**/*.lock"
+    - "!package-lock.json"
+    - "!.pytest_cache/**"
+chat:
+  auto_reply: true

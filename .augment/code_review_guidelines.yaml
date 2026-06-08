@@ -1,0 +1,31 @@
+# Augment Code review guidelines — seeded on the fork default branch (v1.15-dev).
+# The per-repo Context Engine index rebuilds on a fork, so encode the recurring,
+# hard-won review themes here up front.
+guidelines:
+  - title: Docstring-free house style
+    description: >-
+      The story_automator package (skills/bmad-story-automator/src/story_automator/**)
+      is deliberately docstring-free. Do not request docstrings; descriptive names carry
+      intent and rationale belongs in the PR/commit message. Keep only terse inline `#`
+      why-comments where the logic is non-obvious.
+  - title: Deterministic path / filename binding
+    description: >-
+      Artifact paths and filenames must be derived deterministically from config and the
+      release-line resolver — never hardcoded or LLM-freelanced. Flag any place a path is
+      guessed or assembled from a model output rather than resolved from config.
+  - title: JUnit is the source of truth for test counts
+    description: >-
+      Story test counts must be computed from the JUnit report, not parsed from prose or
+      re-derived. Flag test-count logic that bypasses the JUnit source of truth.
+  - title: Always add regression tests
+    description: >-
+      The repo culture strongly values test expansion. A behavior fix without a matching
+      regression test under tests/ is incomplete — flag it.
+  - title: Conventional Commits, no closing keywords
+    description: >-
+      Commits and PR titles use Conventional Commits with a scope, e.g. fix(sprint-compare): ...
+      Do NOT use "Fixes #N" / "Closes #N" closing keywords in PR bodies — bug issues are
+      tracked separately from their fixes. Plain `#N` mentions are fine.
+  - title: Scope and reuse
+    description: >-
+      Keep changes scoped (<~500 LOC) and prefer reuse over duplication.
