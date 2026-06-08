@@ -38,6 +38,29 @@ class RetroAgentTests(unittest.TestCase):
         self.assertIn("codex exec -s workspace-write", rendered)
         self.assertIn("Execute the BMAD retrospective workflow for epic 2.", rendered)
 
+    def test_build_cmd_binds_test_command_into_dev_prompt(self) -> None:
+        # policy.test.command is rendered into the dev prompt with {junit} bound to
+        # junitPath ({story}->dotted story_id), so the dev run emits the canonical
+        # JUnit name test-counts Tier-1 keys on instead of free-styling it.
+        self._test_policy(command="phpunit --log-junit {junit}", junitPath="tests/junit-{story}.xml")
+        stdout = io.StringIO()
+        with patch_env(self.project_root), redirect_stdout(stdout):
+            code = _build_cmd(["dev", "1.2", "--agent", "claude"])
+        self.assertEqual(code, 0)
+        self.assertIn(
+            "Run the test suite with exactly this command: phpunit --log-junit tests/junit-1.2.xml",
+            stdout.getvalue(),
+        )
+
+    def test_build_cmd_omits_test_line_when_unconfigured(self) -> None:
+        # Empty policy.test (bundled default) -> no test line; that empty slot is the
+        # signal that test-counts should skip.
+        stdout = io.StringIO()
+        with patch_env(self.project_root), redirect_stdout(stdout):
+            code = _build_cmd(["dev", "1.2", "--agent", "claude"])
+        self.assertEqual(code, 0)
+        self.assertNotIn("Run the test suite with exactly this command", stdout.getvalue())
+
     def test_retro_agent_uses_per_task_override_from_state(self) -> None:
         state_file = self.project_root / "retro-state.md"
         state_file.write_text(
@@ -161,6 +184,11 @@ class RetroAgentTests(unittest.TestCase):
             code = cmd_orchestrator_helper(["retro-agent", "--state-file", str(state_file)])
         self.assertEqual(code, 0)
         return json.loads(stdout.getvalue())
+
+    def _test_policy(self, **test_block: str) -> None:
+        path = self.project_root / "_bmad" / "bmm" / "story-automator.policy.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"test": test_block}), encoding="utf-8")
 
     def _config(self) -> dict[str, object]:
         return {

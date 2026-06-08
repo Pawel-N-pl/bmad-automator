@@ -157,10 +157,23 @@ class TestCountsCommandTests(unittest.TestCase):
         self.assertNotIn("Assertions", self.story.read_text(encoding="utf-8"))
 
     def test_story_placeholder_in_junit_path(self) -> None:
+        # {story} expands to the dotted story_id (1.2), not the slug stem. This
+        # reports/{story}.xml shape is intentionally non-production — it proves the
+        # substitution isn't hardcoded to the junit- prefix; don't "fix" it to the
+        # real name (the production-faithful shape is covered by the case below).
         self._policy(junitPath="reports/{story}.xml")
-        self._artifact("reports/1-2-example.xml")
+        self._artifact("reports/1.2.xml")
         _, payload = self._invoke()
-        self.assertTrue(payload["junit_path"].endswith("reports/1-2-example.xml"))
+        self.assertTrue(payload["junit_path"].endswith("reports/1.2.xml"))
+        self.assertEqual(payload["test_counts"]["tests"], 4)
+
+    def test_story_placeholder_production_junit_shape(self) -> None:
+        # Production-faithful shape: tests/junit-{story}.xml -> tests/junit-1.2.xml,
+        # the canonical name the dev/auto run's --log-junit writes and Tier-1 keys on.
+        self._policy(junitPath="tests/junit-{story}.xml")
+        self._artifact("tests/junit-1.2.xml")
+        _, payload = self._invoke()
+        self.assertTrue(payload["junit_path"].endswith("tests/junit-1.2.xml"))
         self.assertEqual(payload["test_counts"]["tests"], 4)
 
     def test_since_gates_stale_artifact_to_skip(self) -> None:

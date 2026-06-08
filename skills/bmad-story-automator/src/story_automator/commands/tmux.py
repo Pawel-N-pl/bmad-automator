@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 from story_automator.core.runtime_layout import runtime_provider
-from story_automator.core.runtime_policy import PolicyError, load_runtime_policy, step_contract
+from story_automator.core.runtime_policy import PolicyError, load_runtime_policy, step_contract, test_config
 from story_automator.core.success_verifiers import resolve_success_contract, run_success_verifier
 from story_automator.core.tmux_runtime import (
     agent_cli,
@@ -177,7 +177,8 @@ def _build_cmd(args: list[str]) -> int:
     try:
         policy = load_runtime_policy(root, state_file=state_file)
         contract = step_contract(policy, step)
-        prompt = _render_step_prompt(contract, story_id, story_prefix, extra)
+        test_command = _resolve_test_command(test_config(policy), story_id)
+        prompt = _render_step_prompt(contract, story_id, story_prefix, extra, test_command)
     except (OSError, PolicyError) as exc:
         print(str(exc), file=__import__("sys").stderr)
         return 1
@@ -204,7 +205,13 @@ def _build_cmd(args: list[str]) -> int:
     return 0
 
 
-def _render_step_prompt(contract: dict[str, object], story_id: str, story_prefix: str, extra_instruction: str) -> str:
+def _render_step_prompt(
+    contract: dict[str, object],
+    story_id: str,
+    story_prefix: str,
+    extra_instruction: str,
+    test_command: str = "",
+) -> str:
     prompt_cfg = contract.get("prompt") or {}
     assets = (contract.get("assets") or {}).get("files") or {}
     template = read_text(str(prompt_cfg.get("templatePath") or ""))
@@ -217,6 +224,7 @@ def _render_step_prompt(contract: dict[str, object], story_id: str, story_prefix
         "{{instructions_line}}": _prompt_line("Then read", str(assets.get("instructions") or "")),
         "{{checklist_line}}": _prompt_line("Validate with", str(assets.get("checklist") or "")),
         "{{template_line}}": _prompt_line("Use template", str(assets.get("template") or "")),
+        "{{test_command_line}}": _prompt_line("Run the test suite with exactly this command", test_command),
         "{{extra_instruction}}": extra_instruction.strip() or str(prompt_cfg.get("defaultExtraInstruction") or ""),
     }
     for key, value in replacements.items():
@@ -226,6 +234,19 @@ def _render_step_prompt(contract: dict[str, object], story_id: str, story_prefix
 
 def _prompt_line(prefix: str, value: str) -> str:
     return f"{prefix}: {value}\n" if value else ""
+
+
+# Bind the dev/auto run to policy.test.command so test-counts Tier-1 captures
+# exactly what its Tier-2 fallback would re-run. {junit} carries the canonical
+# artifact name (junitPath with {story}->dotted story_id) so the command's
+# --log-junit writes the file Tier-1 keys on. Empty policy.test.command -> ""
+# (no test line), which is the agreed signal that test-counts should skip.
+def _resolve_test_command(test_cfg: dict[str, str], story_id: str) -> str:
+    command = test_cfg["command"]
+    if not command:
+        return ""
+    junit = test_cfg["junitPath"].replace("{story}", story_id)
+    return command.replace("{junit}", junit).replace("{story}", story_id)
 
 
 def cmd_heartbeat_check(args: list[str]) -> int:

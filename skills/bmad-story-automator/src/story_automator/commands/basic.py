@@ -314,20 +314,22 @@ def _reconcile_section(text: str, git_files: list[str]) -> tuple[str, list[str]]
 
 
 # Map a story id to its artifact file (resolved key first, prefix glob fallback).
-# Returns (story_file, None) on success or (None, error_payload) so callers can
-# emit the error verbatim and bail.
-def _resolve_story_file(repo: str, story: str) -> tuple[Path | None, dict | None]:
+# Returns (story_file, story_id, None) on success or (None, "", error_payload) so
+# callers can emit the error verbatim and bail. story_id is the dotted form
+# (e.g. "5.1") — callers substitute it into {story} tokens (junit names, commands)
+# because it is shorter and immutable across story retitles, unlike the slug stem.
+def _resolve_story_file(repo: str, story: str) -> tuple[Path | None, str, dict | None]:
     norm = normalize_story_key(repo, story)
     if norm is None:
-        return None, {"ok": False, "error": "story_key_invalid", "input": story}
+        return None, "", {"ok": False, "error": "story_key_invalid", "input": story}
     artifacts = implementation_artifacts_dir(repo)
     exact = artifacts / f"{norm.key}.md"
     if norm.key and exact.is_file():  # disambiguate via the resolved key before falling back to prefix glob
-        return exact, None
+        return exact, norm.id, None
     matches = sorted(artifacts.glob(f"{norm.prefix}-*.md"))
     if not matches:
-        return None, {"ok": False, "error": "story_file_not_found", "prefix": norm.prefix}
-    return matches[0], None
+        return None, "", {"ok": False, "error": "story_file_not_found", "prefix": norm.prefix}
+    return matches[0], norm.id, None
 
 
 def cmd_reconcile_story(args: list[str]) -> int:
@@ -347,7 +349,7 @@ def cmd_reconcile_story(args: list[str]) -> int:
     if not Path(repo).is_dir():
         write_json({"ok": False, "error": "repo_not_found"})
         return 1
-    story_file, err = _resolve_story_file(repo, story)
+    story_file, _, err = _resolve_story_file(repo, story)
     if story_file is None:
         write_json(err)
         return 1
@@ -453,7 +455,7 @@ def cmd_test_counts(args: list[str]) -> int:
     if not Path(repo).is_dir():
         write_json({"ok": False, "error": "repo_not_found"})
         return 1
-    story_file, err = _resolve_story_file(repo, story)
+    story_file, story_id, err = _resolve_story_file(repo, story)
     if story_file is None:
         write_json(err)
         return 1
@@ -467,7 +469,7 @@ def cmd_test_counts(args: list[str]) -> int:
     if not junit_rel:  # Tier 3: nothing configured — File List reconcile still ran independently
         write_json({"ok": True, "skipped": True, "reason": "test_not_configured", "test_counts": None, "wrote": False})
         return 0
-    junit_path = Path(repo) / junit_rel.replace("{story}", story_file.stem)
+    junit_path = Path(repo) / junit_rel.replace("{story}", story_id)
     fresh = junit_path.is_file() and (since is None or junit_path.stat().st_mtime >= since)
     rerun_exit: int | None = None
     if fresh:  # Tier 1: trust the artifact emitted by this dev run
@@ -475,7 +477,7 @@ def cmd_test_counts(args: list[str]) -> int:
     elif command:  # Tier 2: deterministic floor — re-run and parse what it emits
         # Shell-quote substitutions: the placeholders must be left UNquoted in the
         # command template (paths with spaces/metacharacters would break bash -c).
-        resolved = command.replace("{junit}", shlex.quote(str(junit_path))).replace("{story}", shlex.quote(story_file.stem))
+        resolved = command.replace("{junit}", shlex.quote(str(junit_path))).replace("{story}", shlex.quote(story_id))
         ensure_dir(junit_path.parent)
         rerun_exit = run_cmd("bash", "-c", resolved, cwd=repo).exit_code  # non-zero is expected when tests fail
         if not junit_path.is_file():
