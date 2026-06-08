@@ -160,6 +160,19 @@
   </step>
 
   <step n="5" goal="Update story status and sync sprint tracking">
+    <!-- Structural-completeness gate (AI-4.2 / TD-16): a story must not flip to done
+         with an incomplete body. Run AFTER appending the review section above, so it
+         is legitimately present now. Treat any failure here exactly like a CRITICAL. -->
+    <action>Verify the story file carries every done-required section: `### Agent Model Used`
+      (a real model id, not a placeholder / `{{...}}` / TODO), `## Tasks / Subtasks`
+      (no remaining unchecked `- [ ]` dev task; deferred `[AI-Review]` follow-ups are
+      exempt), `### File List`, `## Senior Developer Review (AI)` (non-empty — the section
+      you just appended), and `## Change Log` (non-empty).</action>
+    <check if="any required section is missing, empty, or placeholder">
+      <action>Record a synthetic CRITICAL: "story structure incomplete" listing the
+        missing/placeholder sections and any unchecked task count</action>
+    </check>
+
     <!-- Determine new status based on CRITICAL issues only (v3.0) -->
     <!-- HIGH/MEDIUM/LOW are tracked as action items but don't block automation -->
     <check if="0 CRITICAL issues remain after fixes">

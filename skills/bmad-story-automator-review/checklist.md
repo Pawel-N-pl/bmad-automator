@@ -16,6 +16,7 @@
 - [ ] Outcome decided (Approve/Changes Requested/Blocked)
 - [ ] Review notes appended under "Senior Developer Review (AI)"
 - [ ] Change Log updated with review entry
+- [ ] Structural-completeness gate passed before the status flip (Step 5): non-empty `## Senior Developer Review (AI)` + `## Change Log`, non-placeholder `### Agent Model Used`, no remaining unchecked dev tasks — any failure is a synthetic CRITICAL that holds the story at in-progress
 - [ ] Status updated according to settings (if enabled)
 - [ ] Sprint status synced (if sprint tracking enabled)
 - [ ] Story saved successfully

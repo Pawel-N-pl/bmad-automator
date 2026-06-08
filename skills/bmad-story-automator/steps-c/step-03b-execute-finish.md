@@ -71,6 +71,19 @@ if [ "$is_done" != "true" ]; then
     file_done=$("{scriptsDir}" orchestrator-helper story-file-status {story_id} | jq -r '.status')
     [ "$file_done" = "done" ] && is_done="true"
 fi
+
+# Done-close structural gate (AI-4.2 / TD-16): status/sprint may both say done, but
+# hold the story if its body is structurally incomplete — missing Senior Developer
+# Review (AI) / Change Log, a placeholder Agent Model, or unchecked dev tasks. This
+# runs LAST (after §D review wrote its section, §E reconciled), so the review section
+# is legitimately present by now. A failure is treated exactly like a CRITICAL.
+if [ "$is_done" = "true" ]; then
+    structure=$("{scriptsDir}" validate-story-structure --repo "{project-root}" --story {story_id})
+    if [ "$(printf '%s' "$structure" | jq -r '.in_sync')" != "true" ]; then
+        is_done="false"
+        echo "- **[$(date -u +%Y-%m-%dT%H:%M:%SZ)]** CRITICAL: story structure incomplete, holding at in-progress: $(printf '%s' "$structure" | jq -c '{missing_sections, placeholder_sections, unchecked_tasks}')" >> "{outputFile}"
+    fi
+fi
 ```
 
 - If `is_done == false` → return to Code Review Loop (Step 3, section D)
