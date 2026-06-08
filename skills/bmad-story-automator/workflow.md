@@ -122,6 +122,13 @@ During preflight (step-02), the following sequence is **MANDATORY**:
 Load and read full config from {configPath} and resolve:
 
 - `project_name`, `output_folder`, `user_name`, `communication_language`, `document_output_language`
+- **`output_folder` is deterministic — resolve it ONCE, do NOT infer it per-artifact.** Use the
+  `output_folder` value from {configPath}; if that key is absent, default to
+  `{project-root}/_bmad-output`. Substitute this single resolved value for EVERY `{output_folder}`
+  placeholder in step frontmatter (the automator's own `story-automator/` control dir, the
+  epic/sprint paths, etc.). This is the same root the code-anchored policy-snapshot dir already uses
+  (`data/orchestration-policy.json` → `snapshot.relativeDir: _bmad-output/story-automator/...`);
+  guessing a different base per artifact splits one run's output across two roots.
 - ✅ Communicate in `{communication_language}`
 
 ### 2. Mode Determination
