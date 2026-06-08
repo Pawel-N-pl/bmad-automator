@@ -11,7 +11,7 @@ from pathlib import Path
 from story_automator.commands.orchestrator import cmd_orchestrator_helper
 from story_automator.commands.orchestrator_epic_agents import parse_agent_config
 from story_automator.commands.state import cmd_build_state_doc
-from story_automator.commands.tmux import _build_cmd
+from story_automator.commands.tmux import _build_cmd, _resolve_test_command
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -51,6 +51,19 @@ class RetroAgentTests(unittest.TestCase):
             "Run the test suite with exactly this command: phpunit --log-junit tests/junit-1.2.xml",
             stdout.getvalue(),
         )
+
+    def test_resolve_test_command_quotes_path_with_spaces(self) -> None:
+        # A junitPath with a space is shlex-quoted, mirroring the Tier-2 rerun so the
+        # dev writes to the same file Tier-1 checks. (Asserted on the helper directly:
+        # _build_cmd shlex-quotes the whole prompt, which would mangle the inner quotes.)
+        resolved = _resolve_test_command(
+            {"command": "phpunit --log-junit {junit}", "junitPath": "re ports/junit-{story}.xml"},
+            "1.2",
+        )
+        self.assertEqual(resolved, "phpunit --log-junit 're ports/junit-1.2.xml'")
+
+    def test_resolve_test_command_empty_when_unconfigured(self) -> None:
+        self.assertEqual(_resolve_test_command({"command": "", "junitPath": ""}, "1.2"), "")
 
     def test_build_cmd_omits_test_line_when_unconfigured(self) -> None:
         # Empty policy.test (bundled default) -> no test line; that empty slot is the

@@ -241,12 +241,15 @@ def _prompt_line(prefix: str, value: str) -> str:
 # artifact name (junitPath with {story}->dotted story_id) so the command's
 # --log-junit writes the file Tier-1 keys on. Empty policy.test.command -> ""
 # (no test line), which is the agreed signal that test-counts should skip.
+# Substitutions are shlex-quoted to mirror the Tier-2 rerun (basic.py): a junit
+# path with spaces/metacharacters must resolve to the SAME file the dev runs and
+# Tier-1 checks, otherwise the run leaks to a different name and Tier-2 re-runs.
 def _resolve_test_command(test_cfg: dict[str, str], story_id: str) -> str:
     command = test_cfg["command"]
     if not command:
         return ""
     junit = test_cfg["junitPath"].replace("{story}", story_id)
-    return command.replace("{junit}", junit).replace("{story}", story_id)
+    return command.replace("{junit}", shlex.quote(junit)).replace("{story}", shlex.quote(story_id))
 
 
 def cmd_heartbeat_check(args: list[str]) -> int:
