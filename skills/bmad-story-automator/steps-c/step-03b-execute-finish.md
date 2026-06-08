@@ -79,7 +79,13 @@ fi
 # is legitimately present by now. A failure is treated exactly like a CRITICAL.
 if [ "$is_done" = "true" ]; then
     structure=$("{scriptsDir}" validate-story-structure --repo "{project-root}" --story {story_id})
-    if [ "$(printf '%s' "$structure" | jq -r '.in_sync')" != "true" ]; then
+    # Fail closed either way (an unverifiable story must not auto-complete; the review
+    # loop's maxCycles backstops any persistent failure), but distinguish the gate hit
+    # from a validator/infra error so a stuck story is diagnosable — mirrors §E's .ok branch.
+    if [ "$(printf '%s' "$structure" | jq -r '.ok // "false"')" != "true" ]; then
+        is_done="false"
+        echo "- **[$(date -u +%Y-%m-%dT%H:%M:%SZ)]** CRITICAL: story-structure gate could not run, holding at in-progress: $(printf '%s' "$structure" | jq -c '.error // .')" >> "{outputFile}"
+    elif [ "$(printf '%s' "$structure" | jq -r '.in_sync')" != "true" ]; then
         is_done="false"
         echo "- **[$(date -u +%Y-%m-%dT%H:%M:%SZ)]** CRITICAL: story structure incomplete, holding at in-progress: $(printf '%s' "$structure" | jq -c '{missing_sections, placeholder_sections, unchecked_tasks}')" >> "{outputFile}"
     fi
