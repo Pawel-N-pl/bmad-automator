@@ -382,6 +382,107 @@ def cmd_reconcile_story(args: list[str]) -> int:
     return 0
 
 
+# Headings every done-bound story must carry. Presence is asserted via the
+# _section_bounds seam shared with the File List / Test Counts reconcilers, so this
+# gate stays a read-only ASSERTION (a missing review section can't be synthesized,
+# only flagged). File List emptiness is owned by cmd_reconcile_story and test
+# counts by cmd_test_counts — this gate only covers what neither does.
+_STRUCTURE_SECTIONS = (
+    "### Agent Model Used",
+    "## Tasks / Subtasks",
+    "### File List",
+    "## Senior Developer Review (AI)",
+    "## Change Log",
+)
+# Of those, the sections whose body must also be meaningfully filled (present but
+# empty/placeholder is still a failure). Tasks is gated by its unchecked-box scan
+# and File List by reconcile, so neither needs a non-empty body check here.
+_STRUCTURE_NONEMPTY_SECTIONS = (
+    "### Agent Model Used",
+    "## Senior Developer Review (AI)",
+    "## Change Log",
+)
+_TASKS_HEADING = "## Tasks / Subtasks"
+
+
+def _is_placeholder_body(text: str) -> bool:
+    low = text.strip().lower()
+    if not low:  # present heading, empty body
+        return True
+    if "{{" in low or "}}" in low:  # unrendered template token (e.g. {{agent_model}})
+        return True
+    return low in {"todo", "tbd", "n/a", "-", "<model>"} or low.startswith(("todo", "tbd"))
+
+
+# Count genuinely-undone dev tasks in the Tasks/Subtasks section. Scoped to that
+# section's body (up to its first subheading, per _section_bounds). Deferred
+# `[AI-Review]` action items are excluded: the review may legitimately leave those
+# open on a story it still flips to done (they are HIGH/MEDIUM, not blocking).
+def _count_unchecked_tasks(lines: list[str]) -> int:
+    bounds = _section_bounds(lines, _TASKS_HEADING)
+    if bounds is None:  # missing heading is reported via missing_sections instead
+        return 0
+    start, end = bounds
+    return sum(
+        1
+        for line in lines[start + 1 : end]
+        if line.lstrip().startswith("- [ ]") and "[AI-Review]" not in line
+    )
+
+
+# AI-4.2 / TD-16: assert the story BODY is structurally complete before it flips to
+# `done`. A story can otherwise reach done on its Status field + 0 CRITICAL alone,
+# carrying a placeholder Agent Model, unchecked tasks, no Change Log, or no
+# `## Senior Developer Review (AI)` section (Story 4.4 did exactly that). Read-only:
+# mirrors cmd_reconcile_story's payload shape; in_sync is the single gate signal.
+def cmd_validate_story_structure(args: list[str]) -> int:
+    if args and args[0] in {"--help", "-h"}:
+        print("Usage: validate-story-structure --repo PATH --story KEY")
+        return 0
+    repo = ""
+    story = ""
+    for idx, arg in enumerate(args):
+        if arg == "--repo" and idx + 1 < len(args):
+            repo = args[idx + 1]
+        elif arg == "--story" and idx + 1 < len(args):
+            story = args[idx + 1]
+    if not repo or not story:
+        write_json({"ok": False, "error": "missing_args"})
+        return 1
+    if not Path(repo).is_dir():
+        write_json({"ok": False, "error": "repo_not_found"})
+        return 1
+    story_file, _, err = _resolve_story_file(repo, story)
+    if story_file is None:
+        write_json(err)
+        return 1
+    lines = story_file.read_text(encoding="utf-8").splitlines()
+    missing_sections: list[str] = []
+    placeholder_sections: list[str] = []
+    for heading in _STRUCTURE_SECTIONS:
+        bounds = _section_bounds(lines, heading)
+        if bounds is None:
+            missing_sections.append(heading)
+            continue
+        if heading in _STRUCTURE_NONEMPTY_SECTIONS:
+            start, end = bounds
+            if _is_placeholder_body("\n".join(lines[start + 1 : end])):
+                placeholder_sections.append(heading)
+    unchecked_tasks = _count_unchecked_tasks(lines)
+    in_sync = not missing_sections and not placeholder_sections and unchecked_tasks == 0
+    write_json(
+        {
+            "ok": True,
+            "story_file": str(story_file),
+            "missing_sections": missing_sections,
+            "placeholder_sections": placeholder_sections,
+            "unchecked_tasks": unchecked_tasks,
+            "in_sync": in_sync,
+        }
+    )
+    return 0
+
+
 TEST_COUNTS_HEADING = "### Test Counts"
 
 

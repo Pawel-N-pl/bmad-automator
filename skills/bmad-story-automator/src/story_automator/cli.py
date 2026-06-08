@@ -13,6 +13,7 @@ from .commands.basic import (
     cmd_reconcile_story,
     cmd_stop_hook,
     cmd_test_counts,
+    cmd_validate_story_structure,
 )
 from .commands.orchestrator import cmd_orchestrator_helper
 from .commands.state import cmd_build_state_doc, cmd_sprint_compare, cmd_state_metrics, cmd_validate_state
@@ -44,6 +45,7 @@ def main(argv: list[str] | None = None) -> int:
         "commit-story": cmd_commit_story,
         "reconcile-story": cmd_reconcile_story,
         "test-counts": cmd_test_counts,
+        "validate-story-structure": cmd_validate_story_structure,
         "parse-epic": _cmd_parse_epic,
         "parse-story": _cmd_parse_story,
         "parse-story-range": _cmd_parse_story_range,
@@ -82,6 +84,7 @@ def _usage(stream: object) -> None:
         "commit-story",
         "reconcile-story",
         "test-counts",
+        "validate-story-structure",
         "parse-epic",
         "parse-story",
         "parse-story-range",
