@@ -20,3 +20,7 @@ def safe_int(value: str) -> int:
         return int(value)
     except:  # noqa
         return 0
+
+
+def shout(text: str) -> str:
+    return "{}!!!".format(text.upper())
