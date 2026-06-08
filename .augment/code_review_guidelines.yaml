@@ -2,25 +2,53 @@
 # The per-repo Context Engine index rebuilds on a fork, so encode the recurring,
 # hard-won review themes here up front.
 guidelines:
-  - title: Docstring-free house style
+  - title: Docstring-free production code
     description: >-
-      The story_automator package (skills/bmad-story-automator/src/story_automator/**)
-      is deliberately docstring-free. Do not request docstrings; descriptive names carry
-      intent and rationale belongs in the PR/commit message. Keep only terse inline `#`
-      why-comments where the logic is non-obvious.
+      PRODUCTION code under skills/bmad-story-automator/src/story_automator/** is
+      deliberately docstring-free (~0.5%, verified). Do not request docstrings; descriptive
+      names carry intent and rationale belongs in the PR/commit message. Keep only terse
+      inline `#` why-comments where the logic is non-obvious (~0.9% of LOC) — flag a comment
+      only when it restates obvious code, never ask for more. NOTE: tests are the exception —
+      test classes intentionally carry class-level docstrings naming the regression they guard.
+  - title: Stdlib-only, no runtime dependencies
+    description: >-
+      The package has zero runtime dependencies (stdlib only, requires-python >=3.11).
+      Flag any new third-party import added to production code.
+  - title: Python idioms (mandatory)
+    description: >-
+      Every module starts with `from __future__ import annotations`. Type hints are
+      near-total — annotate all params/returns, use `X | None` (not typing.Optional) and
+      lowercase builtin generics (list[str], dict[str, Any]). Strings are f-strings only —
+      flag any .format() or % interpolation. Within-package imports are relative.
+      Structured return values use @dataclass(frozen=True) value objects, never NamedTuple.
+  - title: Error handling and CLI boundary
+    description: >-
+      Raise ValueError (or the PolicyError/HookConfigError subclasses) for contract
+      violations. Never use a bare `except`; never `sys.exit`. CLI cmd_* functions catch
+      domain exceptions, emit print_json({"ok": False, "error": ...}) and return 1; the
+      success path returns 0.
+  - title: Atomic writes
+    description: >-
+      All state/artifact file writes go through write_atomic() (tempfile + rename). Flag a
+      direct open()-for-write of a state or artifact file.
+  - title: unittest tests with mandatory regression coverage
+    description: >-
+      Tests use unittest.TestCase classes (NOT pytest plain functions, fixtures, or
+      @parametrize) — do not suggest converting to pytest. Temp dirs use
+      tempfile.TemporaryDirectory() with setUp/tearDown; no mocking library. Every behavior
+      fix MUST add or extend a matching regression test — flag a fix that lacks one.
   - title: Deterministic path / filename binding
     description: >-
       Artifact paths and filenames must be derived deterministically from config and the
       release-line resolver — never hardcoded or LLM-freelanced. Flag any place a path is
-      guessed or assembled from a model output rather than resolved from config.
+      guessed or assembled from a model output rather than resolved from config. Use the
+      centralized core/artifact_paths.py constants; call .resolve() before .name on a
+      possibly-relative root.
   - title: JUnit is the source of truth for test counts
     description: >-
-      Story test counts must be computed from the JUnit report, not parsed from prose or
-      re-derived. Flag test-count logic that bypasses the JUnit source of truth.
-  - title: Always add regression tests
-    description: >-
-      The repo culture strongly values test expansion. A behavior fix without a matching
-      regression test under tests/ is incomplete — flag it.
+      Story test counts must be computed from the JUnit report (core/junit.py), summing
+      DIRECT children only, not parsed from prose or re-derived. Flag test-count logic that
+      bypasses the JUnit source of truth.
   - title: Conventional Commits, no closing keywords
     description: >-
       Commits and PR titles use Conventional Commits with a scope, e.g. fix(sprint-compare): ...

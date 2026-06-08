@@ -16,19 +16,37 @@ reviews:
   path_instructions:
     - path: "skills/bmad-story-automator/src/story_automator/**/*.py"
       instructions: >-
-        This package is intentionally docstring-free. Do NOT suggest adding
-        module/class/function docstrings — descriptive names carry intent and
-        rationale belongs in the PR/commit message. Only flag inline `#` comments
-        when they restate obvious code; keep terse "why" comments. Prefer reuse over
-        duplication and require tests for behavior changes. Path/filename derivation
-        must be deterministic from config/release-line resolvers — flag any
-        LLM-freelanced or hardcoded artifact filenames, and flag JUnit/test-count
-        logic that does not read from the JUnit source of truth.
+        PRODUCTION code is intentionally docstring-free (~0.5% rate, verified). Do NOT
+        suggest adding module/class/function docstrings — descriptive names carry intent
+        and rationale belongs in the PR/commit message. Inline `#` comments are sparse
+        (~0.9% of LOC) and exist only to explain a non-obvious "why" (invariants, edge
+        cases); flag a `#` comment only when it restates obvious code, never ask for more.
+        STDLIB-ONLY: the package has zero runtime dependencies — flag any new third-party
+        import. `from __future__ import annotations` is mandatory at the top of every
+        module. Type hints are near-total: annotate all params and returns; use `X | None`
+        (NOT typing.Optional) and lowercase builtin generics `list[str]`/`dict[str, Any]`.
+        Strings: f-strings ONLY — flag any `.format()` or `%` interpolation. Within-package
+        imports are relative (`from ..core.x import`). Errors: raise `ValueError` (or the
+        `PolicyError`/`HookConfigError` subclasses) for contract violations; never a bare
+        `except`, never `sys.exit` — CLI `cmd_*` functions catch domain exceptions, emit
+        `print_json({"ok": False, "error": ...})` and `return 1`, success returns 0.
+        Structured returns use `@dataclass(frozen=True)` value objects, never NamedTuple.
+        File writes go through `write_atomic()` (tempfile + rename) — flag direct
+        open()-for-write of state/artifact files. Paths use pathlib and the centralized
+        `core/artifact_paths.py` constants (DEFAULT_OUTPUT_FOLDER) — flag hardcoded or
+        LLM-freelanced artifact filenames and any `.name` taken before `.resolve()` on a
+        possibly-relative root. Test-count logic must read from `core/junit.py` (the JUnit
+        source of truth), summing DIRECT children only. Prefer reuse over duplication.
     - path: "tests/**/*.py"
       instructions: >-
-        Tests are flat under tests/ and pin specific regressions (unicode round-trip,
-        sprint-compare key format, test counts, reconcile). When reviewing a fix, check
-        a matching regression test was added or extended. Docstring-free style applies here too.
+        Tests are flat under tests/ and use `unittest.TestCase` CLASSES — NOT pytest plain
+        functions, fixtures, or @parametrize. Do not suggest converting to pytest style.
+        Each test class SHOULD carry a 1-2 line class-level docstring naming the regression
+        it guards — this is the house pattern, do NOT flag these docstrings (the no-docstring
+        rule is for production code only). Temp dirs use `tempfile.TemporaryDirectory()` with
+        setUp/tearDown, not tmp_path; no mocking library — production functions are called
+        directly against temp dirs (git repos built inline via subprocess). Every behavior
+        fix MUST add or extend a matching regression test — flag a fix that lacks one.
   # Vendored/generated artifacts and binaries — no value reviewing these.
   path_filters:
     - "!**/*.png"
