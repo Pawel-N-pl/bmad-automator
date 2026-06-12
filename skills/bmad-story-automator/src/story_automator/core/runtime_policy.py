@@ -315,6 +315,12 @@ def _validate_policy_shape(policy: dict[str, Any]) -> None:
     _expect_optional_nested_dict(runtime, "merge", "runtime")
     parser_runtime_config(policy)
     test = _expect_optional_dict(policy, "test")
+    # Reject unknown keys (mirrors the top-level and steps checks): a typo like
+    # `junit_path` would otherwise be silently ignored, leaving junitPath empty
+    # and disabling JUnit capture instead of failing the policy closed.
+    unknown_test_keys = sorted(set(test) - {"command", "junitPath"})
+    if unknown_test_keys:
+        raise PolicyError(f"unknown test keys: {', '.join(unknown_test_keys)}")
     for key in ("command", "junitPath"):
         if key in test and not isinstance(test.get(key), str):
             raise PolicyError(f"test.{key} must be a string")

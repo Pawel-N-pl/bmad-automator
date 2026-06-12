@@ -11,8 +11,9 @@ _COUNT_ATTRS = ("tests", "failures", "errors", "skipped")
 
 # Aggregate {tests, failures, errors, skipped, assertions|None} from a JUnit
 # report. Reads only standard testsuite/testsuites attrs (the project decides HOW
-# its runner emits them); raises ValueError on unreadable/non-JUnit XML so the
-# caller can degrade cleanly.
+# its runner emits them); raises ValueError on unreadable/non-JUnit XML, or on a
+# present-but-malformed/negative count attribute, so the caller can degrade
+# cleanly instead of recording a fabricated total.
 def parse_junit(path: str | Path) -> dict[str, Any]:
     try:
         root = ET.parse(str(path)).getroot()
@@ -44,9 +45,16 @@ def parse_junit(path: str | Path) -> dict[str, Any]:
 
 
 def _int_attr(value: str | None) -> int:
+    # Absent attrs contribute nothing. A present attr must be a non-negative
+    # integer: these counts become the machine-owned story record, so malformed
+    # output (non-numeric, empty, float) or a negative value fails closed with a
+    # ValueError rather than silently coercing to 0 or passing a bogus total.
     if value is None:
         return 0
     try:
-        return int(value)
-    except (TypeError, ValueError):
-        return 0
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"invalid junit count attribute: {value!r}") from exc
+    if parsed < 0:
+        raise ValueError(f"negative junit count attribute: {value!r}")
+    return parsed

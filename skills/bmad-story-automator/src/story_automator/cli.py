@@ -12,11 +12,11 @@ from .commands.basic import (
     cmd_list_sessions,
     cmd_reconcile_story,
     cmd_stop_hook,
-    cmd_test_counts,
     cmd_validate_story_structure,
 )
 from .commands.orchestrator import cmd_orchestrator_helper
 from .commands.state import cmd_build_state_doc, cmd_sprint_compare, cmd_state_metrics, cmd_validate_state
+from .commands.test_counts import cmd_test_counts
 from .commands.tmux import cmd_codex_status_check, cmd_heartbeat_check, cmd_monitor_session, cmd_tmux_status_check, cmd_tmux_wrapper
 from .commands.validate_story_creation import cmd_validate_story_creation
 from .core.common import help_flag, print_json
