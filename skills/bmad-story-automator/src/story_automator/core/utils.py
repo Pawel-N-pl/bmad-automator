@@ -123,9 +123,12 @@ def get_project_root() -> str:
 
 
 def get_project_slug(project_root: str | None = None) -> str:
-    # Resolve before .name so a relative root like "." (whose Path(".").name is "")
-    # doesn't collapse to the generic "project" fallback. Mirrors get_project_hash().
-    root = Path(project_root or get_project_root()).resolve()
+    # abspath, not resolve: normalize a relative root like "." (whose Path(".").name
+    # is "") to an absolute path WITHOUT following symlinks. Project identity is the
+    # path as given, so a symlinked root keeps the link's own basename — and the
+    # existing sa-{slug}- sessions named under it stay visible. Mirrors
+    # get_project_hash().
+    root = Path(os.path.abspath(project_root or get_project_root()))
     value = re.sub(r"[^a-z0-9]", "", root.name.lower())[:8]
     return value or "project"
 
@@ -135,7 +138,10 @@ def md5_hex8(text: str) -> str:
 
 
 def get_project_hash(project_root: str | None = None) -> str:
-    return md5_hex8(str(Path(project_root or get_project_root()).resolve()))
+    # abspath, not resolve: identity must not follow symlinks, so it stays
+    # consistent with get_project_slug and a symlinked root is not silently
+    # re-identified as its target.
+    return md5_hex8(os.path.abspath(project_root or get_project_root()))
 
 
 def project_slug(project_root: str | None = None) -> str:
