@@ -12,10 +12,10 @@ from ..core.utils import count_matches, ensure_dir, file_exists, get_project_roo
 
 
 def _yaml_value(value: Any) -> str:
-    # Emit non-ASCII as raw UTF-8, not \uXXXX escapes. These values are read back
-    # with unquote_scalar (frontmatter.py), which strips the surrounding quotes
-    # WITHOUT JSON-decoding, so an ensure_ascii escape would round-trip as the
-    # literal text "\uXXXX" and corrupt the value.
+    # Serialize scalars as JSON with ensure_ascii=False: non-ASCII stays raw UTF-8
+    # (no \uXXXX), and backslashes/quotes/control chars get JSON escapes. The
+    # reader, unquote_scalar (utils.py), json-decodes double-quoted scalars, so
+    # this is a single round-tripping contract on both ends.
     return json.dumps(value, ensure_ascii=False)
 
 

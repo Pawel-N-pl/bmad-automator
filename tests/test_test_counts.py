@@ -10,7 +10,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 
 import story_automator
-from story_automator.commands.basic import cmd_test_counts
+from story_automator.commands.test_counts import cmd_test_counts
 from story_automator.core.junit import parse_junit
 
 # Pin the bundled policy to THIS checkout so the override merge is hermetic even
@@ -77,6 +77,24 @@ class ParseJunitTests(unittest.TestCase):
     def test_non_junit_root_raises(self) -> None:
         with self.assertRaises(ValueError):
             parse_junit(self._xml('<coverage/>'))
+
+    def test_non_numeric_count_raises(self) -> None:
+        # A malformed count must fail closed (ValueError), not coerce to 0 and
+        # fabricate a total in the machine-owned story record.
+        with self.assertRaises(ValueError):
+            parse_junit(self._xml('<testsuite tests="abc" failures="1" errors="0" skipped="0"/>'))
+
+    def test_empty_count_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            parse_junit(self._xml('<testsuite tests="" failures="0" errors="0" skipped="0"/>'))
+
+    def test_negative_count_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            parse_junit(self._xml('<testsuite tests="-1" failures="0" errors="0" skipped="0"/>'))
+
+    def test_non_numeric_assertions_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            parse_junit(self._xml('<testsuite tests="1" failures="0" errors="0" skipped="0" assertions="x"/>'))
 
 
 class TestCountsCommandTests(unittest.TestCase):
@@ -243,6 +261,30 @@ class TestCountsCommandTests(unittest.TestCase):
         code, payload = self._invoke()
         self.assertEqual(code, 1)
         self.assertEqual(payload["error"], "policy_invalid")
+
+    def test_unknown_policy_test_key_is_invalid(self) -> None:
+        # A typo like junit_path must fail the policy closed, not be silently
+        # ignored (which would leave junitPath empty and disable JUnit capture).
+        self._policy(junit_path="reports/junit.xml")
+        code, payload = self._invoke()
+        self.assertEqual(code, 1)
+        self.assertEqual(payload["error"], "policy_invalid")
+
+    def test_absolute_junit_path_is_rejected(self) -> None:
+        # An absolute junitPath would discard the repo prefix on join, letting the
+        # rerun read/write outside the project. Build the absolute path from pathlib
+        # so it is unambiguously absolute on every platform (not a POSIX literal).
+        outside = (self.repo.parent / "outside-junit.xml").resolve()
+        self._policy(junitPath=str(outside))
+        code, payload = self._invoke()
+        self.assertEqual(code, 1)
+        self.assertEqual(payload["error"], "junit_path_invalid")
+
+    def test_parent_traversal_junit_path_is_rejected(self) -> None:
+        self._policy(junitPath="../outside.xml")
+        code, payload = self._invoke()
+        self.assertEqual(code, 1)
+        self.assertEqual(payload["error"], "junit_path_invalid")
 
     def test_invalid_since_is_an_error(self) -> None:
         # A non-numeric --since must fail loud, not silently drop the staleness

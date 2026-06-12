@@ -55,6 +55,13 @@ class RuntimePolicyTests(unittest.TestCase):
         with self.assertRaises(PolicyError):
             load_effective_policy(str(self.project_root))
 
+    def test_unknown_test_key_rejected(self) -> None:
+        # A typo like junit_path must fail the policy closed rather than being
+        # silently ignored, which would leave junitPath empty and disable capture.
+        self._write_override({"test": {"junit_path": "reports/junit.xml"}})
+        with self.assertRaisesRegex(PolicyError, "unknown test keys: junit_path"):
+            load_effective_policy(str(self.project_root))
+
     def test_required_asset_missing_fails(self) -> None:
         shutil.rmtree(self.project_root / ".claude" / "skills" / "bmad-create-story")
         with self.assertRaises(PolicyError):

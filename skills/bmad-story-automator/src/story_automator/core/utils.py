@@ -69,8 +69,12 @@ def write_atomic(path: str | Path, data: str | bytes) -> None:
     ensure_dir(path.parent)
     fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
+        # Force UTF-8 for text (not the runner's locale default) so non-ASCII
+        # content round-trips regardless of locale — same contract as the explicit
+        # encoding="utf-8" on the direct write_text calls this helper replaces.
         mode = "wb" if isinstance(data, bytes) else "w"
-        with os.fdopen(fd, mode) as handle:
+        encoding = None if isinstance(data, bytes) else "utf-8"
+        with os.fdopen(fd, mode, encoding=encoding) as handle:
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
@@ -123,9 +127,12 @@ def get_project_root() -> str:
 
 
 def get_project_slug(project_root: str | None = None) -> str:
-    # Resolve before .name so a relative root like "." (whose Path(".").name is "")
-    # doesn't collapse to the generic "project" fallback. Mirrors get_project_hash().
-    root = Path(project_root or get_project_root()).resolve()
+    # abspath, not resolve: normalize a relative root like "." (whose Path(".").name
+    # is "") to an absolute path WITHOUT following symlinks. Project identity is the
+    # path as given, so a symlinked root keeps the link's own basename — and the
+    # existing sa-{slug}- sessions named under it stay visible. Mirrors
+    # get_project_hash().
+    root = Path(os.path.abspath(project_root or get_project_root()))
     value = re.sub(r"[^a-z0-9]", "", root.name.lower())[:8]
     return value or "project"
 
@@ -135,7 +142,10 @@ def md5_hex8(text: str) -> str:
 
 
 def get_project_hash(project_root: str | None = None) -> str:
-    return md5_hex8(str(Path(project_root or get_project_root()).resolve()))
+    # abspath, not resolve: identity must not follow symlinks, so it stays
+    # consistent with get_project_slug and a symlinked root is not silently
+    # re-identified as its target.
+    return md5_hex8(os.path.abspath(project_root or get_project_root()))
 
 
 def project_slug(project_root: str | None = None) -> str:
@@ -178,6 +188,18 @@ def help_flag(value: str) -> bool:
 def unquote_scalar(value: str) -> str:
     value = value.strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        if value[0] == '"':
+            # Double-quoted scalars are emitted by _yaml_value via json.dumps, so
+            # decode the JSON escapes (\\, \", \n, ...) to round-trip the original
+            # value exactly — same contract on both ends. Fall back to a bare strip
+            # for any double-quoted text that isn't valid JSON (e.g. hand-authored
+            # YAML using escapes JSON doesn't accept), preserving prior behaviour.
+            try:
+                decoded = json.loads(value)
+            except json.JSONDecodeError:
+                return value[1:-1]
+            if isinstance(decoded, str):
+                return decoded
         return value[1:-1]
     return value
 
