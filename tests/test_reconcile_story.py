@@ -141,7 +141,10 @@ class ReconcileStoryTests(unittest.TestCase):
 
         payload = self._run("--write")
         self.assertEqual(payload["git_files"], ["src/a.py"])
-        self.assertTrue(payload["story_file"].endswith("docs/bmad/implementation-artifacts/1-2-example.md"))
+        # Normalize separators: story_file is str(Path), so it uses backslashes on
+        # Windows; compare against a posix tail to stay platform-portable.
+        story_file_posix = Path(payload["story_file"]).as_posix()
+        self.assertTrue(story_file_posix.endswith("docs/bmad/implementation-artifacts/1-2-example.md"))
 
     def test_non_ascii_path_captured_verbatim(self) -> None:
         self._write_story("# Story 1.2\n\n### File List\n")

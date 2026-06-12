@@ -27,27 +27,39 @@ to snapshot the record. Reconciling here — not at dev-close — is what actual
 
 ```bash
 # Done-close gate: reconcile File List against git truth before the commit snapshots it.
+# Reconcile SUCCESS is a prerequisite for commit-story: committing a story record whose
+# final File List sync failed would defeat the purpose of syncing immediately before the
+# snapshot, so on failure we hold and escalate rather than commit a known-unsynced record.
 reconcile=$("{scriptsDir}" reconcile-story --repo "{project-root}" --story {story_id} --write)
 if [ "$(printf '%s' "$reconcile" | jq -r '.ok')" = "true" ]; then
   echo "- **[$(date -u +%Y-%m-%dT%H:%M:%SZ)]** File List reconciled: $(printf '%s' "$reconcile" | jq -c '{missing_from_story, stale_in_story, wrote}')" >> "{outputFile}"
+  reconcile_ok=true
 else
-  echo "- **[$(date -u +%Y-%m-%dT%H:%M:%SZ)]** WARNING: File List reconcile failed: $(printf '%s' "$reconcile" | jq -c '.error // .')" >> "{outputFile}"
+  echo "- **[$(date -u +%Y-%m-%dT%H:%M:%SZ)]** CRITICAL: File List reconcile failed, holding before commit (record not committed): $(printf '%s' "$reconcile" | jq -c '.error // .')" >> "{outputFile}"
+  reconcile_ok=false
 fi
 
-# Sync test counts from JUnit truth (machine-computed; ends count drift). --since "$dev_started"
-# (set in step-03 §B) trusts the artifact left by the latest run for THIS story — after `auto`
-# re-ran the suite — or re-runs the configured command as a deterministic floor, else skips.
-test_counts=$("{scriptsDir}" test-counts --repo "{project-root}" --story {story_id} --since "$dev_started" --write)
-if [ "$(printf '%s' "$test_counts" | jq -r '.ok')" = "true" ]; then
-  echo "- **[$(date -u +%Y-%m-%dT%H:%M:%SZ)]** Test counts: $(printf '%s' "$test_counts" | jq -c '{source, skipped, reason, test_counts, wrote}')" >> "{outputFile}"
-else
-  echo "- **[$(date -u +%Y-%m-%dT%H:%M:%SZ)]** WARNING: test-counts failed: $(printf '%s' "$test_counts" | jq -c '.error // .')" >> "{outputFile}"
-fi
+# Only sync test counts and commit once the File List reconcile has succeeded. A failed
+# reconcile fails closed (ok=false below), routing to the same escalation as a failed commit.
+if [ "$reconcile_ok" = "true" ]; then
+  # Sync test counts from JUnit truth (machine-computed; ends count drift). --since "$dev_started"
+  # (set in step-03 §B) trusts the artifact left by the latest run for THIS story — after `auto`
+  # re-ran the suite — or re-runs the configured command as a deterministic floor, else skips.
+  test_counts=$("{scriptsDir}" test-counts --repo "{project-root}" --story {story_id} --since "$dev_started" --write)
+  if [ "$(printf '%s' "$test_counts" | jq -r '.ok')" = "true" ]; then
+    echo "- **[$(date -u +%Y-%m-%dT%H:%M:%SZ)]** Test counts: $(printf '%s' "$test_counts" | jq -c '{source, skipped, reason, test_counts, wrote}')" >> "{outputFile}"
+  else
+    echo "- **[$(date -u +%Y-%m-%dT%H:%M:%SZ)]** WARNING: test-counts failed: $(printf '%s' "$test_counts" | jq -c '.error // .')" >> "{outputFile}"
+  fi
 
-commit=$("{scriptsDir}" commit-story --repo "{project-root}" --story {story_id} --title "{title}")
-ok=$(echo "$commit" | jq -r '.ok')
+  commit=$("{scriptsDir}" commit-story --repo "{project-root}" --story {story_id} --title "{title}")
+  ok=$(echo "$commit" | jq -r '.ok')
+else
+  ok=false
+fi
 ```
 
+- If `reconcile_ok == false` → File List was not synced to git truth; do **not** commit. Return to the Code Review Loop (Step 3, section D) to resolve, or escalate if it persists.
 - If `ok == true`:
   ```bash
   # Update Story Progress: mark git-commit done
