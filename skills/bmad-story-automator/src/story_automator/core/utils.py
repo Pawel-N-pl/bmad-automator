@@ -69,8 +69,12 @@ def write_atomic(path: str | Path, data: str | bytes) -> None:
     ensure_dir(path.parent)
     fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
+        # Force UTF-8 for text (not the runner's locale default) so non-ASCII
+        # content round-trips regardless of locale — same contract as the explicit
+        # encoding="utf-8" on the direct write_text calls this helper replaces.
         mode = "wb" if isinstance(data, bytes) else "w"
-        with os.fdopen(fd, mode) as handle:
+        encoding = None if isinstance(data, bytes) else "utf-8"
+        with os.fdopen(fd, mode, encoding=encoding) as handle:
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())

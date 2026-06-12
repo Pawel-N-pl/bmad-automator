@@ -272,8 +272,10 @@ class TestCountsCommandTests(unittest.TestCase):
 
     def test_absolute_junit_path_is_rejected(self) -> None:
         # An absolute junitPath would discard the repo prefix on join, letting the
-        # rerun read/write outside the project.
-        self._policy(junitPath="/tmp/outside-junit.xml")
+        # rerun read/write outside the project. Build the absolute path from pathlib
+        # so it is unambiguously absolute on every platform (not a POSIX literal).
+        outside = (self.repo.parent / "outside-junit.xml").resolve()
+        self._policy(junitPath=str(outside))
         code, payload = self._invoke()
         self.assertEqual(code, 1)
         self.assertEqual(payload["error"], "junit_path_invalid")

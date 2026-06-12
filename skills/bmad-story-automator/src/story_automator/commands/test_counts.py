@@ -5,7 +5,7 @@ from pathlib import Path
 
 from ..core.junit import parse_junit
 from ..core.runtime_policy import PolicyError, load_policy_unresolved, test_config
-from ..core.utils import ensure_dir, run_cmd, write_json
+from ..core.utils import ensure_dir, run_cmd, write_atomic, write_json
 from .basic import _resolve_story_file, _section_bounds
 
 TEST_COUNTS_HEADING = "### Test Counts"
@@ -143,7 +143,7 @@ def cmd_test_counts(args: list[str]) -> int:
     new_text = _replace_or_append_section(text, TEST_COUNTS_HEADING, _render_test_counts(counts))
     wrote = False
     if do_write and new_text != text:
-        story_file.write_text(new_text, encoding="utf-8")
+        write_atomic(story_file, new_text)
         wrote = True
     payload = {
         "ok": True,

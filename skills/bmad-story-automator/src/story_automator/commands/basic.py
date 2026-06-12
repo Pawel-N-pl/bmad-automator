@@ -14,6 +14,7 @@ from ..core.story_keys import normalize_story_key
 from ..core.utils import (
     get_project_slug,
     run_cmd,
+    write_atomic,
     write_json,
 )
 
@@ -363,7 +364,7 @@ def cmd_reconcile_story(args: list[str]) -> int:
     stale = sorted(current_set - git_set)
     wrote = False
     if do_write and new_text != text:
-        story_file.write_text(new_text, encoding="utf-8")
+        write_atomic(story_file, new_text)
         wrote = True
     write_json(
         {
