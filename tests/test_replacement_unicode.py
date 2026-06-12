@@ -18,7 +18,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 from story_automator.commands.orchestrator import cmd_orchestrator_helper
-from story_automator.commands.state import cmd_build_state_doc
+from story_automator.commands.state import _yaml_value, cmd_build_state_doc
 from story_automator.core.frontmatter import parse_simple_frontmatter
 
 
@@ -113,19 +113,37 @@ class StateBuildUnicodeTests(_FixtureMixin, unittest.TestCase):
         self.assertIn(r"\to", text)
 
     def test_frontmatter_scalars_round_trip_non_ascii(self) -> None:
-        # Regression: scalars must survive a write->parse cycle. The frontmatter
-        # reader (unquote_scalar) strips quotes without JSON-decoding, so values
-        # have to be written as raw UTF-8 — an ensure_ascii "\uXXXX" escape would
-        # read back as literal "\uXXXX" text. assertIn on the whole document does
-        # NOT catch this because the body {{token}} carries the real char.
+        # Regression: scalars must survive a write->parse cycle. _yaml_value writes
+        # raw UTF-8 (no ensure_ascii "\uXXXX") and the reader json-decodes, so the
+        # value round-trips exactly. assertIn on the whole document does NOT catch
+        # a corrupt round-trip because the body {{token}} carries the real char.
         config = self._default_config()
-        config["epicName"] = "upmon — Epic 3 obsłuż"
+        config["epicName"] = "demo — Epic 3 obsłuż"
         config["aiCommand"] = "claude — go"
         config["customInstructions"] = "run probe — ciężki ż"
         fields = parse_simple_frontmatter(self._build_state(config).read_text(encoding="utf-8"))
-        self.assertEqual(fields.get("epicName"), "upmon — Epic 3 obsłuż")
+        self.assertEqual(fields.get("epicName"), "demo — Epic 3 obsłuż")
         self.assertEqual(fields.get("aiCommand"), "claude — go")
         self.assertEqual(fields.get("customInstructions"), "run probe — ciężki ż")
+
+    def test_frontmatter_scalars_round_trip_escaped(self) -> None:
+        # Single writer/reader contract: every value _yaml_value emits must parse
+        # back identically, not just the non-ASCII case. Covers backslashes,
+        # embedded quotes, newlines and a regex-replacement token (the same shape
+        # agentConfig primary/fallback values carry) — all previously read back
+        # with doubled backslashes / stray escapes before the reader json-decoded.
+        for value in [
+            r"path\to\file",
+            'say "hi"',
+            "line1\nline2",
+            r"agent\g<0>",
+            "C:\\Users\\dev",
+            "trailing # not-a-comment",
+            "obsłuż — żółw",
+        ]:
+            doc = f"---\naiCommand: {_yaml_value(value)}\n---\n"
+            parsed = parse_simple_frontmatter(doc)["aiCommand"]
+            self.assertEqual(parsed, value, f"round-trip failed for {value!r}")
 
     def test_agent_config_special_chars_do_not_break_resub(self) -> None:
         # The agentConfig block is spliced in with re.sub too. A non-ASCII

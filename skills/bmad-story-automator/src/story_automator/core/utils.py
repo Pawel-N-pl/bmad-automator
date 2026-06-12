@@ -184,6 +184,18 @@ def help_flag(value: str) -> bool:
 def unquote_scalar(value: str) -> str:
     value = value.strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        if value[0] == '"':
+            # Double-quoted scalars are emitted by _yaml_value via json.dumps, so
+            # decode the JSON escapes (\\, \", \n, ...) to round-trip the original
+            # value exactly — same contract on both ends. Fall back to a bare strip
+            # for any double-quoted text that isn't valid JSON (e.g. hand-authored
+            # YAML using escapes JSON doesn't accept), preserving prior behaviour.
+            try:
+                decoded = json.loads(value)
+            except json.JSONDecodeError:
+                return value[1:-1]
+            if isinstance(decoded, str):
+                return decoded
         return value[1:-1]
     return value
 
